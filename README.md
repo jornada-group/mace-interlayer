@@ -20,6 +20,7 @@
     - [Training](#training)
     - [Evaluation](#evaluation)
   - [Tutorials](#tutorials)
+  - [Interlayer MACE](#interlayermace)
   - [CUDA acceleration with cuEquivariance](#cuda-acceleration-with-cuequivariance)
   - [Weights and Biases for experiment tracking](#weights-and-biases-for-experiment-tracking)
   - [Pretrained Foundation Models](#pretrained-foundation-models)
@@ -173,6 +174,11 @@ We also have a more detailed Colab tutorials on:
  - [Introduction to MACE training and evaluation](https://colab.research.google.com/drive/1ZrTuTvavXiCxTFyjBV4GqlARxgFwYAtX)
  - [Introduction to MACE active learning and fine-tuning](https://colab.research.google.com/drive/1oCSVfMhWrqHTeHbKgUSQN9hTKxLzoNyb)
  - [MACE theory and code (advanced)](https://colab.research.google.com/drive/1AlfjQETV_jZ0JQnV5M3FGwAM2SGCl2aU)
+
+
+## Interlayer MACE
+
+This fork of MACE comes with small modifications to the architechture to implement an interlayer model. 
 
 ## CUDA acceleration with cuEquivariance
 

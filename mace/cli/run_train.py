@@ -243,6 +243,7 @@ def run(args: argparse.Namespace) -> None:
                 charges_key=head_config.charges_key,
                 head_name=head_config.head_name,
                 keep_isolated_atoms=head_config.keep_isolated_atoms,
+                is_interlayer_xyz_files= args.interlayer_xyz_files,
             )
             head_config.collections = collections
             head_config.atomic_energies_dict = atomic_energies_dict
@@ -313,6 +314,7 @@ def run(args: argparse.Namespace) -> None:
                 charges_key=args.charges_key,
                 head_name="pt_head",
                 keep_isolated_atoms=args.keep_isolated_atoms,
+                is_interlayer_xyz_files= args.interlayer_xyz_files
             )
             head_config_pt = HeadConfig(
                 head_name="pt_head",
