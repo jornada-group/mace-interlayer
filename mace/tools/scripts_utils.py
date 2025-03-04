@@ -47,6 +47,7 @@ def get_dataset_from_xyz(
     dipole_key: str = "dipoles",
     charges_key: str = "charges",
     head_key: str = "head",
+    is_interlayer_xyz_files: Optional[bool] = False,
 ) -> Tuple[SubsetCollection, Optional[Dict[int, float]]]:
     """Load training and test dataset from xyz file"""
     atomic_energies_dict, all_train_configs = data.load_from_xyz(
@@ -62,6 +63,7 @@ def get_dataset_from_xyz(
         extract_atomic_energies=True,
         keep_isolated_atoms=keep_isolated_atoms,
         head_name=head_name,
+        interlayer_xyz_file=is_interlayer_xyz_files
     )
     logging.info(
         f"Training set [{len(all_train_configs)} configs, {np.sum([1 if config.energy else 0 for config in all_train_configs])} energy, {np.sum([config.forces.size for config in all_train_configs])} forces] loaded from '{train_path}'"
@@ -79,6 +81,7 @@ def get_dataset_from_xyz(
             head_key=head_key,
             extract_atomic_energies=False,
             head_name=head_name,
+            interlayer_xyz_file=is_interlayer_xyz_files
         )
         logging.info(
             f"Validation set [{len(valid_configs)} configs, {np.sum([1 if config.energy else 0 for config in valid_configs])} energy, {np.sum([config.forces.size for config in valid_configs])} forces] loaded from '{valid_path}'"
@@ -106,6 +109,7 @@ def get_dataset_from_xyz(
             head_key=head_key,
             extract_atomic_energies=False,
             head_name=head_name,
+            interlayer_xyz_file=is_interlayer_xyz_files
         )
         # create list of tuples (config_type, list(Atoms))
         test_configs = data.test_config_types(all_test_configs)

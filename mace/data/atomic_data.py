@@ -16,7 +16,7 @@ from mace.tools import (
     voigt_to_matrix,
 )
 
-from .neighborhood import get_neighborhood
+from .neighborhood import get_neighborhood, get_neighborhood_layered
 from .utils import Configuration
 
 
@@ -119,9 +119,14 @@ class AtomicData(torch_geometric.data.Data):
     ) -> "AtomicData":
         if heads is None:
             heads = ["default"]
-        edge_index, shifts, unit_shifts, cell = get_neighborhood(
-            positions=config.positions, cutoff=cutoff, pbc=config.pbc, cell=config.cell
-        )
+        if not config.is_interlayer_config:
+            edge_index, shifts, unit_shifts, cell = get_neighborhood(
+                positions=config.positions, cutoff=cutoff, pbc=config.pbc, cell=config.cell
+            )
+        else:
+            edge_index, shifts, unit_shifts, cell = get_neighborhood_layered(
+                positions=config.positions, cutoff=cutoff, pbc=config.pbc, cell=config.cell
+            )
         indices = atomic_numbers_to_indices(config.atomic_numbers, z_table=z_table)
         one_hot = to_one_hot(
             torch.tensor(indices, dtype=torch.long).unsqueeze(-1),
