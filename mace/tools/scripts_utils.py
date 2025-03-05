@@ -50,6 +50,7 @@ def get_dataset_from_xyz(
     is_interlayer_xyz_files: Optional[bool] = False,
 ) -> Tuple[SubsetCollection, Optional[Dict[int, float]]]:
     """Load training and test dataset from xyz file"""
+    
     atomic_energies_dict, all_train_configs = data.load_from_xyz(
         file_path=train_path,
         config_type_weights=config_type_weights,
@@ -422,6 +423,23 @@ def get_atomic_energies(E0s, train_collection, z_table) -> dict:
             except Exception as e:
                 raise RuntimeError(
                     f"Could not compute average E0s if no training xyz given, error {e} occured"
+                ) from e
+        if E0s.lower() == "zeros":
+            logging.info(
+                "Using E0s as zero for this dataset"
+            )
+            # catch if colections.train not defined above
+            try:
+                assert train_collection is not None
+                atomic_energies_dict = data.compute_average_E0s(
+                    train_collection, z_table
+
+                )
+                for key, item in atomic_energies_dict.items():
+                    item = 0.0
+            except Exception as e:
+                raise RuntimeError(
+                    f"Weird Error"
                 ) from e
         else:
             if E0s.endswith(".json"):

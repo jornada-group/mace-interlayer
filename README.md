@@ -178,7 +178,31 @@ We also have a more detailed Colab tutorials on:
 
 ## Interlayer MACE
 
-This fork of MACE comes with small modifications to the architechture to implement an interlayer model. 
+This fork of MACE comes with small modifications to the architechture to implement an interlayer model. You can use mace_run_train as you would normally with an extra flag indicating you have an interlayer extxyz dataset. At present we only support extxyz datasets. Ensure that your extxyz datset, for each atoms object has a "layer_ids" attribute (like forces). There can only be two such layer_ids currently (it makes a bit more sense that way). We also introduce a convenient flag (E0s="zeros", setting the atomic energy dict to zeros for this model) for setting the energies array for model training. 
+
+This would be run as
+```sh
+mace_run_train \
+    --name="MACE_model" \
+    --train_file="train.xyz" \
+    --valid_fraction=0.05 \
+    --test_file="test.xyz" \
+    --E0s="zeros" \ #
+    --model="MACE" \
+    --hidden_irreps='128x0e + 128x1o' \
+    --r_max=5.0 \
+    --batch_size=10 \
+    --max_num_epochs=1500 \
+    --swa \
+    --start_swa=1200 \
+    --ema \
+    --ema_decay=0.99 \
+    --amsgrad \
+    --restart_latest \
+    --device=cuda \
+```
+
+Note that only mace_run_train and mace_prepare_data have been modified at present.
 
 ## CUDA acceleration with cuEquivariance
 

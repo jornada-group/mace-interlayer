@@ -227,6 +227,7 @@ def run(args: argparse.Namespace) -> None:
             config_type_weights = get_config_type_weights(
                 head_config.config_type_weights
             )
+            
             collections, atomic_energies_dict = get_dataset_from_xyz(
                 work_dir=args.work_dir,
                 train_path=head_config.train_file,
@@ -298,6 +299,7 @@ def run(args: argparse.Namespace) -> None:
                 f"Using foundation model for multiheads finetuning with {args.pt_train_file}"
             )
             heads = list(dict.fromkeys(["pt_head"] + heads))
+            
             collections, atomic_energies_dict = get_dataset_from_xyz(
                 work_dir=args.work_dir,
                 train_path=args.pt_train_file,
