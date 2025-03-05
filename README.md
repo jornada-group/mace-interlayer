@@ -178,7 +178,7 @@ We also have a more detailed Colab tutorials on:
 
 ## Interlayer MACE
 
-This fork of MACE comes with small modifications to the architechture to implement an interlayer model. You can use mace_run_train as you would normally with an extra flag indicating you have an interlayer extxyz dataset. At present we only support extxyz datasets. Ensure that your extxyz datset, for each atoms object has a "layer_ids" attribute (like forces). There can only be two such layer_ids currently (it makes a bit more sense that way). We also introduce a convenient flag (E0s="zeros"), setting the atomic energy dict to zeros for this model) for setting the energies array for model training. 
+This fork of MACE comes with small modifications to the architechture to implement an interlayer model. You can use mace_run_train as you would normally with an extra flag indicating you have an interlayer extxyz dataset. At present we only support extxyz datasets. Ensure that your extxyz datset, for each atoms object has a "layer_ids" attribute (like forces). There can only be two such layer_ids currently (it makes a bit more sense that way). We also introduce a convenient flag (E0s="zeros"), setting the atomic energy dict to zeros for this model for setting the energies array for model training. 
 
 This would be run as
 ```sh
@@ -201,7 +201,14 @@ mace_run_train \
     --restart_latest \
     --device=cuda \
 ```
-
+One can run mace_eval_configs similarly as 
+```sh
+mace_eval_configs \
+    --configs=".config.extxyz" \
+    --model="file.model" \
+    --output="output.extxyz" \
+    --interlayer_xyz_files
+```
 Note that only mace_run_train and mace_prepare_data have been modified at present. To use an interlayer MACE calculator one can use the following
 ```python
 from mace.calculators import MACECalculator
