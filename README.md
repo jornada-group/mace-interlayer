@@ -202,7 +202,15 @@ mace_run_train \
     --device=cuda \
 ```
 
-Note that only mace_run_train and mace_prepare_data have been modified at present.
+Note that only mace_run_train and mace_prepare_data have been modified at present. To use an interlayer MACE calculator one can use the following
+```python
+from mace.calculators import MACECalculator
+from ase import build
+
+atoms = ... # Get atoms object with layerids
+calc = MACECalculator(is_interlayer_calc=True) 
+atoms.calc = calc
+```
 
 ## CUDA acceleration with cuEquivariance
 
