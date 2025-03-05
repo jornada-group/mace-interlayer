@@ -125,8 +125,9 @@ class AtomicData(torch_geometric.data.Data):
             )
         else:
             edge_index, shifts, unit_shifts, cell = get_neighborhood_layered(
-                positions=config.positions, cutoff=cutoff, pbc=config.pbc, cell=config.cell
+                positions=config.positions, cutoff=cutoff, pbc=config.pbc, cell=config.cell, atomic_numbers=config.atomic_numbers, layer_ids=config.layer_ids
             )
+
         indices = atomic_numbers_to_indices(config.atomic_numbers, z_table=z_table)
         one_hot = to_one_hot(
             torch.tensor(indices, dtype=torch.long).unsqueeze(-1),

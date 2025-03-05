@@ -102,15 +102,16 @@ def get_neighborhood_layered(
     
 
     nats_tot = positions.shape[0]
+
     
-    tmp_at_num = layer_ids*200 + atomic_numbers  # Each atom has a unique ID for its layer, number
+    tmp_at_num = layer_ids*200 + nums  # Each atom has a unique ID for its layer, number
 
-
+    unique_at_nums = np.unique(tmp_at_num)
     cutoff_dict = {}
-    for comb in itertools.combinations(range(max_layer + 1), 2):
+    for comb in itertools.combinations(unique_at_nums, 2):
         cutoff_dict.update({comb: cutoff})
     if pbc is None:
-        pbc = (False, False, False)
+        pbc = (True, True, False)
 
     if cell is None or cell.any() == np.zeros((3, 3)).any():
         cell = np.identity(3, dtype=float)
@@ -138,7 +139,7 @@ def get_neighborhood_layered(
         cell=cell,
         positions=positions,
         cutoff=cutoff_dict,
-        numbers=tmp_at_num,
+        numbers=tmp_at_num.astype(np.int32),
         # self_interaction=True,  # we want edges from atom to itself in different periodic images
         # use_scaled_positions=False,  # positions are not scaled positions
     )
