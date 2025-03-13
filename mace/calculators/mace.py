@@ -75,7 +75,9 @@ class MACECalculator(Calculator):
             assert model_type == "MACE", "CuEq only supports MACE models"
             compile_mode = None
         if is_interlayer_calc:
-            logging.info("Initialized interlayer calculator, will use layer_ids in atoms object to construct neighbour list ")
+            logging.info(
+                "Initialized interlayer calculator, will use layer_ids in atoms object to construct neighbour list "
+            )
             self.is_interlayer_calc = True
         else:
             self.is_interlayer_calc = False
@@ -256,8 +258,13 @@ class MACECalculator(Calculator):
         return dict_of_tensors
 
     def _atoms_to_batch(self, atoms):
-        config = data.config_from_atoms(atoms, charges_key=self.charges_key, is_interlayer_atoms=self.is_interlayer_calc, interlayer_atoms_key="layer_ids")
-        
+        config = data.config_from_atoms(
+            atoms,
+            charges_key=self.charges_key,
+            is_interlayer_atoms=self.is_interlayer_calc,
+            interlayer_atoms_key="layer_ids",
+        )
+
         data_loader = torch_geometric.dataloader.DataLoader(
             dataset=[
                 data.AtomicData.from_config(

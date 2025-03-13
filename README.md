@@ -209,7 +209,8 @@ mace_eval_configs \
     --output="output.extxyz" \
     --interlayer_xyz_files
 ```
-Note that only mace_run_train and mace_prepare_data have been modified at present. To use an interlayer MACE calculator one can use the following
+mace_prepare_data has also been appropriately modified, but not tested for use.
+To use an interlayer MACE calculator one can use the following
 ```python
 from mace.calculators import MACECalculator
 from ase import build
