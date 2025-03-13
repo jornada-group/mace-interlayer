@@ -7,6 +7,7 @@ from matscipy.neighbours import neighbour_list
 from ase.atoms import Atoms
 import itertools
 
+
 def get_neighborhood(
     positions: np.ndarray,  # [num_positions, 3]
     cutoff: float,
@@ -72,6 +73,7 @@ def get_neighborhood(
 ## AR: New function to implement layer based neighbourhoods, relies on layer_id array in atoms object
 ## Only makes sense for bilayer data, will raise errors at present other wise
 
+
 def get_neighborhood_layered(
     positions: np.ndarray,  # [num_positions, 3]
     cutoff: float,
@@ -79,16 +81,20 @@ def get_neighborhood_layered(
     cell: Optional[np.ndarray] = None,  # [3, 3]
     true_self_interaction=False,
     atomic_numbers=None,
-    layer_ids = None,
+    layer_ids=None,
 ):
-    # AR: We assume the user knows that this only works with atoms 
+    # AR: We assume the user knows that this only works with atoms
     # that are in 2 user-identified layers
     # Constructs a graph network connecting only interlayer nodes, using matscipy
 
-    layer_ids = np.array(layer_ids) # convert to numpy array (shouldn't be required, in most use cases)
+    layer_ids = np.array(
+        layer_ids
+    )  # convert to numpy array (shouldn't be required, in most use cases)
 
     if len(np.unique(layer_ids)) != 2:
-        raise ValueError(f"There can be only two types of layers in layer_ids, you have currently {np.unique(layer_ids)}")
+        raise ValueError(
+            f"There can be only two types of layers in layer_ids, you have currently {np.unique(layer_ids)}"
+        )
 
     nums = atomic_numbers
     if nums is None:
@@ -99,17 +105,18 @@ def get_neighborhood_layered(
         cell=cell,
         pbc=pbc,
     )
-    
 
     nats_tot = positions.shape[0]
 
-    
-    tmp_at_num = layer_ids*200 + nums  # Each atom has a unique ID for its layer, number
+    tmp_at_num = (
+        layer_ids * 400 + nums
+    )  # Each atom has a unique ID for its layer, number
 
     unique_at_nums = np.unique(tmp_at_num)
     cutoff_dict = {}
     for comb in itertools.combinations(unique_at_nums, 2):
-        cutoff_dict.update({comb: cutoff})
+        if np.abs(comb[1] - comb[0]) > 200:
+            cutoff_dict.update({comb: cutoff})
     if pbc is None:
         pbc = (True, True, False)
 
@@ -163,4 +170,3 @@ def get_neighborhood_layered(
     shifts = np.dot(unit_shifts, cell)  # [n_edges, 3]
 
     return edge_index, shifts, unit_shifts, cell
-
