@@ -7,6 +7,8 @@ from matscipy.neighbours import neighbour_list
 from ase.atoms import Atoms
 import itertools
 
+NMAX_Z = 400
+
 
 def get_neighborhood(
     positions: np.ndarray,  # [num_positions, 3]
@@ -101,13 +103,13 @@ def get_neighborhood_layered(
         nums = np.zeros(positions.shape[0])
 
     tmp_at_num = (
-        layer_ids * 400 + nums
+        layer_ids * NMAX_Z + nums
     )  # Each atom has a unique ID for its layer, number
 
     unique_at_nums = np.unique(tmp_at_num)
     cutoff_dict = {}
     for comb in itertools.combinations(unique_at_nums, 2):
-        if np.abs(comb[1] - comb[0]) > 200:
+        if np.abs(comb[1] - comb[0]) > NMAX_Z // 2:
             cutoff_dict.update({comb: cutoff})
     if pbc is None:
         pbc = (True, True, False)
