@@ -99,14 +99,6 @@ def get_neighborhood_layered(
     nums = atomic_numbers
     if nums is None:
         nums = np.zeros(positions.shape[0])
-    atoms = Atoms(
-        positions=positions,
-        numbers=nums,
-        cell=cell,
-        pbc=pbc,
-    )
-
-    nats_tot = positions.shape[0]
 
     tmp_at_num = (
         layer_ids * 400 + nums
