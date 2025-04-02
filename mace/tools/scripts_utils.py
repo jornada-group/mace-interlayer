@@ -47,8 +47,10 @@ def get_dataset_from_xyz(
     dipole_key: str = "dipoles",
     charges_key: str = "charges",
     head_key: str = "head",
+    is_interlayer_xyz_files: Optional[bool] = False,
 ) -> Tuple[SubsetCollection, Optional[Dict[int, float]]]:
     """Load training and test dataset from xyz file"""
+    
     atomic_energies_dict, all_train_configs = data.load_from_xyz(
         file_path=train_path,
         config_type_weights=config_type_weights,
@@ -62,6 +64,7 @@ def get_dataset_from_xyz(
         extract_atomic_energies=True,
         keep_isolated_atoms=keep_isolated_atoms,
         head_name=head_name,
+        interlayer_xyz_file=is_interlayer_xyz_files
     )
     logging.info(
         f"Training set [{len(all_train_configs)} configs, {np.sum([1 if config.energy else 0 for config in all_train_configs])} energy, {np.sum([config.forces.size for config in all_train_configs])} forces] loaded from '{train_path}'"
@@ -79,6 +82,7 @@ def get_dataset_from_xyz(
             head_key=head_key,
             extract_atomic_energies=False,
             head_name=head_name,
+            interlayer_xyz_file=is_interlayer_xyz_files
         )
         logging.info(
             f"Validation set [{len(valid_configs)} configs, {np.sum([1 if config.energy else 0 for config in valid_configs])} energy, {np.sum([config.forces.size for config in valid_configs])} forces] loaded from '{valid_path}'"
@@ -106,6 +110,7 @@ def get_dataset_from_xyz(
             head_key=head_key,
             extract_atomic_energies=False,
             head_name=head_name,
+            interlayer_xyz_file=is_interlayer_xyz_files
         )
         # create list of tuples (config_type, list(Atoms))
         test_configs = data.test_config_types(all_test_configs)
@@ -418,6 +423,23 @@ def get_atomic_energies(E0s, train_collection, z_table) -> dict:
             except Exception as e:
                 raise RuntimeError(
                     f"Could not compute average E0s if no training xyz given, error {e} occured"
+                ) from e
+        if E0s.lower() == "zeros":
+            logging.info(
+                "Using E0s as zero for this dataset"
+            )
+            # catch if colections.train not defined above
+            try:
+                assert train_collection is not None
+                atomic_energies_dict = data.compute_average_E0s(
+                    train_collection, z_table
+
+                )
+                for key, item in atomic_energies_dict.items():
+                    item = 0.0
+            except Exception as e:
+                raise RuntimeError(
+                    f"Weird Error"
                 ) from e
         else:
             if E0s.endswith(".json"):

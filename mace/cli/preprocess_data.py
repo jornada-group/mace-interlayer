@@ -183,6 +183,7 @@ def run(args: argparse.Namespace):
         virials_key=args.virials_key,
         dipole_key=args.dipole_key,
         charges_key=args.charges_key,
+        is_interlayer_xyz_files=args.interlayer_xyz_files
     )
 
     # Atomic number table

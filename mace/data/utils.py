@@ -40,6 +40,8 @@ class Configuration:
     charges: Optional[Charges] = None  # atomic unit
     cell: Optional[Cell] = None
     pbc: Optional[Pbc] = None
+    is_interlayer_config: Optional[bool] = False
+    layer_ids: Optional[Vector] = None
 
     weight: float = 1.0  # weight of config in loss
     energy_weight: float = 1.0  # weight of config energy in loss
@@ -94,6 +96,7 @@ def config_from_atoms_list(
     charges_key="REF_charges",
     head_key="head",
     config_type_weights: Optional[Dict[str, float]] = None,
+    is_interlayer_atoms_list: Optional[bool] = False
 ) -> Configurations:
     """Convert list of ase.Atoms into Configurations"""
     if config_type_weights is None:
@@ -101,19 +104,22 @@ def config_from_atoms_list(
 
     all_configs = []
     for atoms in atoms_list:
+
         all_configs.append(
-            config_from_atoms(
-                atoms,
-                energy_key=energy_key,
-                forces_key=forces_key,
-                stress_key=stress_key,
-                virials_key=virials_key,
-                dipole_key=dipole_key,
-                charges_key=charges_key,
-                head_key=head_key,
-                config_type_weights=config_type_weights,
-            )
+                config_from_atoms(
+                    atoms,
+                    energy_key=energy_key,
+                    forces_key=forces_key,
+                    stress_key=stress_key,
+                    virials_key=virials_key,
+                    dipole_key=dipole_key,
+                    charges_key=charges_key,
+                    head_key=head_key,
+                    config_type_weights=config_type_weights,
+                    is_interlayer_atoms=is_interlayer_atoms_list,
+                )
         )
+        
     return all_configs
 
 
@@ -127,16 +133,24 @@ def config_from_atoms(
     charges_key="REF_charges",
     head_key="head",
     config_type_weights: Optional[Dict[str, float]] = None,
+    is_interlayer_atoms: Optional[bool] = False,
+    interlayer_atoms_key: Optional[str] = "REF_layer_ids"
 ) -> Configuration:
     """Convert ase.Atoms to Configuration"""
     if config_type_weights is None:
         config_type_weights = DEFAULT_CONFIG_TYPE_WEIGHTS
+    layer_ids = atoms.arrays.get(interlayer_atoms_key, None)
+    if is_interlayer_atoms:
+        
+        if layer_ids is None:
+            raise ValueError("Each atom must have a layer_ids array!")
 
     energy = atoms.info.get(energy_key, None)  # eV
     forces = atoms.arrays.get(forces_key, None)  # eV / Ang
     stress = atoms.info.get(stress_key, None)  # eV / Ang ^ 3
     virials = atoms.info.get(virials_key, None)
     dipole = atoms.info.get(dipole_key, None)  # Debye
+
     # Charges default to 0 instead of None if not found
     charges = atoms.arrays.get(charges_key, np.zeros(len(atoms)))  # atomic unit
     atomic_numbers = np.array(
@@ -190,6 +204,8 @@ def config_from_atoms(
         config_type=config_type,
         pbc=pbc,
         cell=cell,
+        is_interlayer_config=is_interlayer_atoms,
+        layer_ids=layer_ids
     )
 
 
@@ -223,6 +239,7 @@ def load_from_xyz(
     head_name: str = "Default",
     extract_atomic_energies: bool = False,
     keep_isolated_atoms: bool = False,
+    interlayer_xyz_file: Optional[bool] = False
 ) -> Tuple[Dict[int, float], Configurations]:
     atoms_list = ase.io.read(file_path, index=":")
     if energy_key == "energy":
@@ -247,6 +264,14 @@ def load_from_xyz(
             except Exception as e:  # pylint: disable=W0703
                 logging.error(f"Failed to extract forces: {e}")
                 atoms.arrays["REF_forces"] = None
+
+    if interlayer_xyz_file:
+        for ct, atoms in enumerate(atoms_list):
+            try:
+                atoms.arrays["REF_layer_ids"] = atoms.arrays["layer_ids"] # This is more of a consistency, nothing precludes using layer_ids..
+            except Exception as e:  # pylint: disable=W0703
+                logging.error(f"Failed to extract layer_ids for atom {ct}: {e}")
+                atoms.arrays["REF_layer_ids"] = None
     if stress_key == "stress":
         logging.warning(
             "Since ASE version 3.23.0b1, using stress_key 'stress' is no longer safe when communicating between MACE and ASE. We recommend using a different key, rewriting 'stress' to 'REF_stress'. You need to use --stress_key='REF_stress' to specify the chosen key name."
@@ -299,6 +324,7 @@ def load_from_xyz(
         dipole_key=dipole_key,
         charges_key=charges_key,
         head_key=head_key,
+        is_interlayer_atoms_list=interlayer_xyz_file
     )
     return atomic_energies_dict, configs
 

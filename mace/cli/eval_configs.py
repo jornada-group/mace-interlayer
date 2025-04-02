@@ -44,6 +44,12 @@ def parse_args() -> argparse.Namespace:
         default=False,
     )
     parser.add_argument(
+        "--interlayer_xyz_files",
+        help="Construct Interlayer neighbourhoods",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
         "--return_contributions",
         help="model outputs energy contributions for each body order, only supported for MACE, not ScaleShiftMACE",
         action="store_true",
@@ -88,7 +94,14 @@ def run(args: argparse.Namespace) -> None:
     if args.head is not None:
         for atoms in atoms_list:
             atoms.info["head"] = args.head
-    configs = [data.config_from_atoms(atoms) for atoms in atoms_list]
+    configs = [
+        data.config_from_atoms(
+            atoms,
+            is_interlayer_atoms=args.interlayer_xyz_files,
+            interlayer_atoms_key="layer_ids",
+        )
+        for atoms in atoms_list
+    ]
 
     z_table = utils.AtomicNumberTable([int(z) for z in model.atomic_numbers])
 
