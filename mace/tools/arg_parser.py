@@ -116,6 +116,13 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--r_max", help="distance cutoff (in Ang)", type=float, default=5.0
     )
+
+    parser.add_argument(
+       "--interlayer_xyz_files",
+       help="Construct Interlayer neighbourhoods",
+       action="store_true",
+       default=False,
+    )
     parser.add_argument(
         "--radial_type",
         help="type of radial basis functions",
