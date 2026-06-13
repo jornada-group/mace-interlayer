@@ -1,21 +1,132 @@
 import os
+import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Union
+from typing import Any, Literal, Optional, Union, overload
 
 import torch
 from ase import units
 from ase.calculators.mixing import SumCalculator
 
+from mace.tools.utils import get_cache_dir
+
 from .mace import MACECalculator
+
+_DOWNLOAD_TIMEOUT = 120  # seconds – socket-level read timeout for model downloads
+
+
+def _normalize_github_download_url(url: str) -> str:
+    """Prefer raw.githubusercontent.com for GitHub-hosted model files."""
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme != "https" or parsed.netloc != "github.com":
+        return url
+
+    path_parts = [part for part in parsed.path.split("/") if part]
+    if len(path_parts) < 5:
+        return url
+
+    org, repo, mode = path_parts[:3]
+    if mode not in {"blob", "raw"}:
+        return url
+
+    ref = path_parts[3]
+    file_path = "/".join(path_parts[4:])
+    normalized = f"https://raw.githubusercontent.com/{org}/{repo}/{ref}/{file_path}"
+    if parsed.query and parsed.query != "raw=true":
+        normalized = f"{normalized}?{parsed.query}"
+    return normalized
+
+
+def _urlretrieve_with_timeout(url, filename, timeout=_DOWNLOAD_TIMEOUT):
+    """Download *url* to *filename* with a per-read socket timeout.
+
+    Streams to a ``.part`` sibling and atomically renames on success so
+    interrupted downloads never leave a truncated file at *filename* (which
+    would later make ``torch.load`` fail with a confusing zip-archive error).
+    """
+    tmp = filename + ".part"
+    success = False
+    try:
+        with urllib.request.urlopen(
+            _normalize_github_download_url(url), timeout=timeout
+        ) as response:
+            total = int(response.headers.get("Content-Length", 0))
+            downloaded = 0
+            block_size = 256 * 1024  # 256 KB
+            info = response.info()
+            with open(tmp, "wb") as out:
+                while True:
+                    block = response.read(block_size)
+                    if not block:
+                        break
+                    out.write(block)
+                    downloaded += len(block)
+                    if total > 0:
+                        pct = min(100, downloaded * 100 / total)
+                        print(
+                            f"\rDownloading: {pct:.1f}% "
+                            f"({downloaded / 1024 / 1024:.1f} MB / "
+                            f"{total / 1024 / 1024:.1f} MB)",
+                            end="",
+                            flush=True,
+                        )
+        os.replace(tmp, filename)
+        success = True
+        if total > 0:
+            print()  # newline after progress
+    finally:
+        if not success:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+    return filename, info
+
 
 module_dir = os.path.dirname(__file__)
 local_model_path = os.path.join(
     module_dir, "foundations_models/mace-mpa-0-medium.model"
 )
 
+mace_mp_urls = {
+    "small": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0/2023-12-10-mace-128-L0_energy_epoch-249.model",
+    "medium": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0/2023-12-03-mace-128-L1_epoch-199.model",
+    "large": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0/MACE_MPtrj_2022.9.model",
+    "small-0b": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0b/mace_agnesi_small.model",
+    "medium-0b": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0b/mace_agnesi_medium.model",
+    "small-0b2": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0b2/mace-small-density-agnesi-stress.model",
+    "medium-0b2": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0b2/mace-medium-density-agnesi-stress.model",
+    "large-0b2": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0b2/mace-large-density-agnesi-stress.model",
+    "medium-0b3": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0b3/mace-mp-0b3-medium.model",
+    "medium-mpa-0": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mpa_0/mace-mpa-0-medium.model",
+    "small-omat-0": "https://github.com/ACEsuit/mace-mp/releases/download/mace_omat_0/mace-omat-0-small.model",
+    "medium-omat-0": "https://github.com/ACEsuit/mace-mp/releases/download/mace_omat_0/mace-omat-0-medium.model",
+    "mace-matpes-pbe-0": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_matpes_0/MACE-matpes-pbe-omat-ft.model",
+    "mace-matpes-r2scan-0": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_matpes_0/MACE-matpes-r2scan-omat-ft.model",
+    "mh-0": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_mh_1/mace-mh-0.model",
+    "mh-1": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_mh_1/mace-mh-1.model",
+}
+mace_mp_names = [None] + list(mace_mp_urls.keys())
 
-def download_mace_mp_checkpoint(model: Union[str, Path] = None) -> str:
+mace_off_urls = {
+    "small": "https://raw.githubusercontent.com/ACEsuit/mace-off/main/mace_off23/MACE-OFF23_small.model",
+    "medium": "https://raw.githubusercontent.com/ACEsuit/mace-off/main/mace_off23/MACE-OFF23_medium.model",
+    "large": "https://raw.githubusercontent.com/ACEsuit/mace-off/main/mace_off23/MACE-OFF23_large.model",
+}
+
+polar_model_urls = {
+    "polar-1-s": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_polar_1/MACE-POLAR-1-S.model",
+    "polar-1-m": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_polar_1/MACE-POLAR-1-M.model",
+    "polar-1-l": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_polar_1/MACE-POLAR-1-L.model",
+}
+polar_model_paths = {
+    key: Path(get_cache_dir()) / os.path.basename(url)
+    for key, url in polar_model_urls.items()
+}
+polar_model_names = list(polar_model_paths.keys())
+
+
+def download_mace_mp_checkpoint(model: Optional[Union[str, Path]] = None) -> str:
     """
     Downloads or locates the MACE-MP checkpoint file.
 
@@ -29,50 +140,28 @@ def download_mace_mp_checkpoint(model: Union[str, Path] = None) -> str:
     if model in (None, "medium-mpa-0") and os.path.isfile(local_model_path):
         return local_model_path
 
-    urls = {
-        "small": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0/2023-12-10-mace-128-L0_energy_epoch-249.model",
-        "medium": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0/2023-12-03-mace-128-L1_epoch-199.model",
-        "large": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0/MACE_MPtrj_2022.9.model",
-        "small-0b": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0b/mace_agnesi_small.model",
-        "medium-0b": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0b/mace_agnesi_medium.model",
-        "small-0b2": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0b2/mace-small-density-agnesi-stress.model",
-        "medium-0b2": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0b2/mace-medium-density-agnesi-stress.model",
-        "large-0b2": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0b2/mace-large-density-agnesi-stress.model",
-        "medium-0b3": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0b3/mace-mp-0b3-medium.model",
-        "medium-mpa-0": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mpa_0/mace-mpa-0-medium.model",
-        "medium-omat-0": "https://github.com/ACEsuit/mace-mp/releases/download/mace_omat_0/mace-omat-0-medium.model",
-    }
-
     checkpoint_url = (
-        urls.get(model, urls["medium-mpa-0"])
-        if model
-        in (
-            None,
-            "small",
-            "medium",
-            "large",
-            "small-0b",
-            "medium-0b",
-            "small-0b2",
-            "medium-0b2",
-            "large-0b2",
-            "medium-0b3",
-            "medium-mpa-0",
-            "medium-omat-0",
-        )
+        mace_mp_urls.get(model, mace_mp_urls["medium-mpa-0"])
+        if model in mace_mp_names
         else model
     )
 
-    if checkpoint_url == urls["medium-mpa-0"]:
+    if checkpoint_url == mace_mp_urls["medium-mpa-0"]:
         print(
             "Using medium MPA-0 model as default MACE-MP model, to use previous (before 3.10) default model please specify 'medium' as model argument"
         )
-    if checkpoint_url == urls["medium-omat-0"]:
+    ASL_checkpoint_urls = {
+        mace_mp_urls["small-omat-0"],
+        mace_mp_urls["medium-omat-0"],
+        mace_mp_urls["mace-matpes-pbe-0"],
+        mace_mp_urls["mace-matpes-r2scan-0"],
+    }
+    if checkpoint_url in ASL_checkpoint_urls:
         print(
-            "Using medium OMAT-0 model under Academic Software License (ASL) license, see https://github.com/gabor1/ASL \n To use this model you accept the terms of the license."
+            "Using model under Academic Software License (ASL) license, see https://github.com/gabor1/ASL \n To use this model you accept the terms of the license."
         )
 
-    cache_dir = os.path.expanduser("~/.cache/mace")
+    cache_dir = get_cache_dir()
     checkpoint_url_name = "".join(
         c for c in os.path.basename(checkpoint_url) if c.isalnum() or c in "_"
     )
@@ -81,8 +170,8 @@ def download_mace_mp_checkpoint(model: Union[str, Path] = None) -> str:
     if not os.path.isfile(cached_model_path):
         os.makedirs(cache_dir, exist_ok=True)
         print(f"Downloading MACE model from {checkpoint_url!r}")
-        _, http_msg = urllib.request.urlretrieve(checkpoint_url, cached_model_path)
-        if "Content-Type: text/html" in http_msg:
+        _, http_msg = _urlretrieve_with_timeout(checkpoint_url, cached_model_path)
+        if "Content-Type: text/html" in str(http_msg):
             raise RuntimeError(
                 f"Model download failed, please check the URL {checkpoint_url}"
             )
@@ -91,8 +180,60 @@ def download_mace_mp_checkpoint(model: Union[str, Path] = None) -> str:
     return cached_model_path
 
 
+def download_mace_polar_checkpoint(model: Union[str, Path]) -> str:
+    """
+    Downloads or locates a MACE-Polar checkpoint file.
+
+    Args:
+        model (str or Path): Polar model key ("polar-1-s", "polar-1-m", "polar-1-l"),
+            local model path, or direct URL.
+
+    Returns:
+        str: Path to the downloaded (or cached) checkpoint file.
+    """
+    if model in polar_model_urls:
+        checkpoint_url = polar_model_urls[str(model)]
+    elif isinstance(model, str) and model.startswith("https:"):
+        checkpoint_url = model
+    elif Path(model).exists():
+        return str(model)
+    else:
+        raise ValueError(
+            f"Unknown Polar foundation model: {model}. "
+            f"Supported options: {polar_model_names}, a local file path, or a direct URL."
+        )
+
+    cache_dir = get_cache_dir()
+    checkpoint_url_name = "".join(
+        c for c in os.path.basename(checkpoint_url) if c.isalnum() or c in "_"
+    )
+    cached_model_path = f"{cache_dir}/{checkpoint_url_name}"
+
+    if not os.path.isfile(cached_model_path):
+        os.makedirs(cache_dir, exist_ok=True)
+        print(f"Downloading MACE-Polar model from {checkpoint_url!r}")
+        _, http_msg = _urlretrieve_with_timeout(checkpoint_url, cached_model_path)
+        if "Content-Type: text/html" in str(http_msg):
+            raise RuntimeError(
+                f"Model download failed, please check the URL {checkpoint_url}"
+            )
+        print(f"Cached MACE-Polar model to {cached_model_path}")
+
+    return cached_model_path
+
+
+@overload
+def mace_mp(*, return_raw_model: Literal[True], **kwargs: Any) -> torch.nn.Module: ...
+
+
+@overload
 def mace_mp(
-    model: Union[str, Path] = None,
+    *, return_raw_model: Literal[False] = False, **kwargs: Any
+) -> MACECalculator: ...
+
+
+def mace_mp(
+    model: Optional[Union[str, Path]] = None,
     device: str = "",
     default_dtype: str = "float32",
     dispersion: bool = False,
@@ -101,10 +242,10 @@ def mace_mp(
     dispersion_cutoff: float = 40.0 * units.Bohr,
     return_raw_model: bool = False,
     **kwargs,
-) -> MACECalculator:
+) -> Union[MACECalculator, torch.nn.Module, SumCalculator]:
     """
     Constructs a MACECalculator with a pretrained model based on the Materials Project (89 elements).
-    The model is released under the MIT license. See https://github.com/ACEsuit/mace-mp for all models.
+    The model is released under the MIT license. See https://github.com/ACEsuit/mace-foundations for all models.
     Note:
         If you are using this function, please cite the relevant paper for the Materials Project,
         any paper associated with the MACE model, and also the following:
@@ -132,20 +273,7 @@ def mace_mp(
         MACECalculator: trained on the MPtrj dataset (unless model otherwise specified).
     """
     try:
-        if model in (
-            None,
-            "small",
-            "medium",
-            "large",
-            "medium-mpa-0",
-            "small-0b",
-            "medium-0b",
-            "small-0b2",
-            "medium-0b2",
-            "medium-0b3",
-            "large-0b2",
-            "medium-omat-0",
-        ) or str(model).startswith("https:"):
+        if model in mace_mp_names or str(model).startswith("https:"):
             model_path = download_mace_mp_checkpoint(model)
             print(f"Using Materials Project MACE for MACECalculator with {model_path}")
         else:
@@ -196,13 +324,48 @@ def mace_mp(
     return SumCalculator([mace_calc, d3_calc])
 
 
+def mace_polar(
+    model: Union[str, Path],
+    device: str = "",
+    default_dtype: str = "float32",
+    return_raw_model: bool = False,
+    **kwargs,
+) -> Union[MACECalculator, torch.nn.Module]:
+    try:
+        model_path = download_mace_polar_checkpoint(model)
+        print(f"Using MACE-Polar model for MACECalculator with {model_path}")
+    except Exception as exc:
+        raise RuntimeError("Model download failed and no local model found") from exc
+
+    device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+    if return_raw_model:
+        return torch.load(model_path, map_location=device)
+    return MACECalculator(
+        model_paths=str(model_path),
+        device=device,
+        default_dtype=default_dtype,
+        model_type="PolarMACE",
+        **kwargs,
+    )
+
+
+@overload
+def mace_off(*, return_raw_model: Literal[True], **kwargs: Any) -> torch.nn.Module: ...
+
+
+@overload
 def mace_off(
-    model: Union[str, Path] = None,
+    *, return_raw_model: Literal[False] = False, **kwargs: Any
+) -> MACECalculator: ...
+
+
+def mace_off(
+    model: Optional[Union[str, Path]] = None,
     device: str = "",
     default_dtype: str = "float64",
     return_raw_model: bool = False,
     **kwargs,
-) -> MACECalculator:
+) -> Union[MACECalculator, torch.nn.Module]:
     """
     Constructs a MACECalculator with a pretrained model based on the MACE-OFF23 models.
     The model is released under the ASL license.
@@ -222,20 +385,13 @@ def mace_off(
         MACECalculator: trained on the MACE-OFF23 dataset
     """
     try:
-        if model in (None, "small", "medium", "large") or str(model).startswith(
-            "https:"
-        ):
-            urls = dict(
-                small="https://github.com/ACEsuit/mace-off/blob/main/mace_off23/MACE-OFF23_small.model?raw=true",
-                medium="https://github.com/ACEsuit/mace-off/raw/main/mace_off23/MACE-OFF23_medium.model?raw=true",
-                large="https://github.com/ACEsuit/mace-off/blob/main/mace_off23/MACE-OFF23_large.model?raw=true",
-            )
+        if model is None or model in mace_off_urls or str(model).startswith("https:"):
             checkpoint_url = (
-                urls.get(model, urls["medium"])
-                if model in (None, "small", "medium", "large")
-                else model
+                mace_off_urls["medium"]
+                if model is None
+                else mace_off_urls.get(model, model)
             )
-            cache_dir = os.path.expanduser("~/.cache/mace")
+            cache_dir = get_cache_dir()
             checkpoint_url_name = os.path.basename(checkpoint_url).split("?")[0]
             cached_model_path = f"{cache_dir}/{checkpoint_url_name}"
             if not os.path.isfile(cached_model_path):
@@ -248,7 +404,7 @@ def mace_off(
                 print(
                     "ASL is based on the Gnu Public License, but does not permit commercial use"
                 )
-                urllib.request.urlretrieve(checkpoint_url, cached_model_path)
+                _urlretrieve_with_timeout(checkpoint_url, cached_model_path)
                 print(f"Cached MACE model to {cached_model_path}")
             model = cached_model_path
             msg = f"Using MACE-OFF23 MODEL for MACECalculator with {model}"
@@ -278,11 +434,23 @@ def mace_off(
     return mace_calc
 
 
+@overload
+def mace_anicc(
+    *, return_raw_model: Literal[True], **kwargs: Any
+) -> torch.nn.Module: ...
+
+
+@overload
+def mace_anicc(
+    *, return_raw_model: Literal[False] = False, **kwargs: Any
+) -> MACECalculator: ...
+
+
 def mace_anicc(
     device: str = "cuda",
-    model_path: str = None,
+    model_path: Optional[str] = None,
     return_raw_model: bool = False,
-) -> MACECalculator:
+) -> Union[MACECalculator, torch.nn.Module]:
     """
     Constructs a MACECalculator with a pretrained model based on the ANI (H, C, N, O).
     The model is released under the MIT license.
@@ -297,8 +465,118 @@ def mace_anicc(
         print(
             "Using ANI couple cluster model for MACECalculator, see https://doi.org/10.1063/5.0155322"
         )
+
+    if not os.path.exists(model_path):
+        model_dir = os.path.dirname(model_path)
+        os.makedirs(model_dir, exist_ok=True)
+
+        # Download the model
+        print(f"Model not found at {model_path}. Downloading...")
+        model_url = "https://github.com/ACEsuit/mace/raw/main/mace/calculators/foundations_models/ani500k_large_CC.model"
+
+        try:
+            _urlretrieve_with_timeout(model_url, model_path)
+            print("Download complete!")
+
+        except Exception as e:
+            raise RuntimeError(f"Failed to download model: {e}") from e
+
     if return_raw_model:
         return torch.load(model_path, map_location=device)
     return MACECalculator(
         model_paths=model_path, device=device, default_dtype="float64"
+    )
+
+
+@overload
+def mace_omol(*, return_raw_model: Literal[True], **kwargs: Any) -> torch.nn.Module: ...
+
+
+@overload
+def mace_omol(
+    *, return_raw_model: Literal[False] = False, **kwargs: Any
+) -> MACECalculator: ...
+
+
+def mace_omol(
+    model: Optional[Union[str, Path]] = None,
+    device: str = "",
+    default_dtype: str = "float64",
+    return_raw_model: bool = False,
+    **kwargs,
+) -> Union[MACECalculator, torch.nn.Module]:
+    """
+    Constructs a MACECalculator with a pretrained model based on the MACE-OMOL models.
+    The model is released under the ASL license.
+    Note:
+        If you are using this function, please cite the relevant OMOL paper.
+
+    Args:
+        model (str or Path, optional): Either a path to a local model file or a string specifier.
+            Use "extra_large" or None to download the default OMOL model.
+        device (str, optional): Device to use for the model. Defaults to "cuda" if available.
+        default_dtype (str, optional): Default dtype for the model. Defaults to "float64".
+        return_raw_model (bool, optional): Whether to return the raw model or an ASE calculator. Defaults to False.
+        **kwargs: Passed to MACECalculator.
+
+    Returns:
+        MACECalculator: trained on the OMOL dataset.
+    """
+    urls = {
+        "extra_large": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_omol_0/MACE-omol-0-extra-large-1024.model"
+    }
+
+    try:
+        if model is None or model == "extra_large":
+            checkpoint_url = urls["extra_large"]
+        elif isinstance(model, str) and model.startswith("https:"):
+            checkpoint_url = model
+        elif isinstance(model, (str, Path)) and Path(model).exists():
+            checkpoint_url = str(model)
+        else:
+            raise ValueError(
+                f"Invalid model specification: {model}. "
+                f"Supported options: {list(urls.keys())}, a local file path, or a direct URL."
+            )
+
+        if checkpoint_url.startswith("http"):
+            cache_dir = get_cache_dir()
+            os.makedirs(cache_dir, exist_ok=True)
+            checkpoint_url_name = os.path.basename(checkpoint_url).split("?")[0]
+            cached_model_path = os.path.join(cache_dir, checkpoint_url_name)
+
+            if not os.path.isfile(cached_model_path):
+                print(f"Downloading MACE model from {checkpoint_url!r}")
+                print(
+                    "The model is distributed under the Academic Software License (ASL), see https://github.com/gabor1/ASL\n"
+                    "To use the model, you accept the terms of the license.\n"
+                    "ASL is based on the GNU Public License, but does not permit commercial use."
+                )
+                _urlretrieve_with_timeout(checkpoint_url, cached_model_path)
+                print(f"Cached MACE model to {cached_model_path}")
+            model = cached_model_path
+        else:
+            model = checkpoint_url
+
+    except Exception as exc:
+        raise RuntimeError("Model download failed and no local model found") from exc
+
+    device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+
+    if return_raw_model:
+        return torch.load(model, map_location=device)
+
+    if default_dtype == "float64":
+        print(
+            "Using float64 for MACECalculator, recommended for geometry optimization."
+        )
+    elif default_dtype == "float32":
+        print("Using float32 for MACECalculator, recommended for MD.")
+
+    return MACECalculator(
+        model_paths=model,
+        device=device,
+        default_dtype=default_dtype,
+        **kwargs,
+        head="omol",
     )

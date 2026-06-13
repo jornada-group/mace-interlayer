@@ -10,6 +10,11 @@ build-backend = "setuptools.build_meta"
 profile = "black"
 
 # Pylint
+[tool.pytest.ini_options]
+# Dump tracebacks of all threads after 300s of inactivity per test.
+# This helps diagnose hangs in CI without requiring extra dependencies.
+faulthandler_timeout = 300
+
 [tool.pylint.'MESSAGES CONTROL']
 disable = [
     "line-too-long",
@@ -18,7 +23,9 @@ disable = [
     "missing-class-docstring",
     "missing-function-docstring",
     "too-many-arguments",
+    "too-many-positional-arguments",
     "too-many-locals",
+    "too-many-return-statements",
     "not-callable",
     "logging-fstring-interpolation",
     "logging-not-lazy",
@@ -41,4 +48,4 @@ ignore-paths = [
 ]
 
 [tool.pylint.FORMAT]
-max-module-lines = 1500
+max-module-lines = 2000
