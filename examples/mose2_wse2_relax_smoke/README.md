@@ -1,7 +1,8 @@
 # MoSe2-WSe2 Relaxation Smoke Test
 
-This smoke test validates the interlayer calculator path against the existing
-`mace-interlayer-example` assets without rewriting the source extxyz files.
+This smoke test validates the interlayer calculator path. Model checkpoints
+live in `examples/TMD_trained_models/`; structure and helper code still come
+from `mace-interlayer-example` by default.
 
 ## Version Policy
 
