@@ -33,6 +33,8 @@ dist/
 *.xyz
 /checkpoints
 *.model
+!examples/TMD_trained_models/
+!examples/TMD_trained_models/*.model
 /results
 *.db
 

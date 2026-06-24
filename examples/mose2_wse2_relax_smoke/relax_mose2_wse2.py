@@ -15,6 +15,7 @@ from ase.optimize import BFGS
 
 THIS_DIR = Path(__file__).resolve().parent
 DEFAULT_EXAMPLE_ROOT = THIS_DIR.parents[2] / "mace-interlayer-example"
+DEFAULT_MODELS_ROOT = THIS_DIR.parent / "TMD_trained_models"
 
 
 def import_example_helpers(example_root: Path):
@@ -132,16 +133,15 @@ def main() -> int:
     structure = args.structure or example_root / "MoSe2-WSe2_bilayer_relaxed.xyz"
     mo_model = (
         args.mo_model
-        or example_root / "mace_models/MoSe2-models_rmax2_stagetwo_compiled.model"
+        or DEFAULT_MODELS_ROOT / "MoSe2-models_rmax2_stagetwo_compiled.model"
     )
     w_model = (
         args.w_model
-        or example_root / "mace_models/WSe2-models_rmax2_stagetwo_compiled.model"
+        or DEFAULT_MODELS_ROOT / "WSe2-models_rmax2_stagetwo_compiled.model"
     )
     interlayer_model = (
         args.interlayer_model
-        or example_root
-        / "mace_models/MoSe2_WSe2-models_rmax2_stagetwo_compiled.model"
+        or DEFAULT_MODELS_ROOT / "MoSe2_WSe2-models_rmax2_stagetwo_compiled.model"
     )
     output_root = args.output_root or example_root / "relax_smoke"
 
