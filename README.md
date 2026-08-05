@@ -20,6 +20,7 @@
     - [Training](#training)
     - [Evaluation](#evaluation)
   - [Tutorials](#tutorials)
+  - [Interlayer MACE](#interlayer-mace)
   - [CUDA acceleration with cuEquivariance](#cuda-acceleration-with-cuequivariance)
   - [Weights and Biases for experiment tracking](#weights-and-biases-for-experiment-tracking)
   - [Pretrained Foundation Models](#pretrained-foundation-models)
@@ -179,6 +180,65 @@ We also have a more detailed Colab tutorials on:
 - [Introduction to MACE training and evaluation](https://colab.research.google.com/drive/1ZrTuTvavXiCxTFyjBV4GqlARxgFwYAtX)
 - [Introduction to MACE active learning and fine-tuning](https://colab.research.google.com/drive/1oCSVfMhWrqHTeHbKgUSQN9hTKxLzoNyb)
 - [MACE theory and code (advanced)](https://colab.research.google.com/drive/1AlfjQETV_jZ0JQnV5M3FGwAM2SGCl2aU)
+
+## Interlayer MACE
+
+This fork of MACE includes small modifications to the architecture to implement an interlayer model. Training uses the usual `mace_run_train` workflow with the extra flag `--interlayer_xyz_files`, which builds cross-layer-only neighborhoods from a per-atom `layer_ids` array (stored in `atoms.arrays`, like `forces`). Each structure must have exactly two unique `layer_ids` values.
+
+Direct training reads ASE-readable XYZ/EXTXYZ files. For large datasets you can preprocess to HDF5 with `mace_prepare_data` (the console entry point for `mace/cli/preprocess_data.py`) using the same `--interlayer_xyz_files` flag — that path has interlayer support but is less tested.
+
+Interlayer models are usually trained on residual energies with no atomic self-energy. Set each element's E0 to zero explicitly, e.g. `--E0s='{34: 0.0, 42: 0.0, 74: 0.0}'` for Se/Mo/W. The string `--E0s="zeros"` is not supported by the parser.
+
+This would be run as
+
+```sh
+mace_run_train \
+    --name="MACE_model" \
+    --train_file="train.xyz" \
+    --valid_fraction=0.05 \
+    --test_file="test.xyz" \
+    --interlayer_xyz_files \
+    --E0s='{34: 0.0, 42: 0.0, 74: 0.0}' \
+    --model="MACE" \
+    --hidden_irreps='128x0e + 128x1o' \
+    --r_max=5.0 \
+    --batch_size=10 \
+    --max_num_epochs=1500 \
+    --stage_two \
+    --start_stage_two=1200 \
+    --ema \
+    --ema_decay=0.99 \
+    --amsgrad \
+    --restart_latest \
+    --device=cuda \
+```
+
+One can run `mace_eval_configs` similarly:
+
+```sh
+mace_eval_configs \
+    --configs="your_configs.extxyz" \
+    --model="file.model" \
+    --output="output.extxyz" \
+    --interlayer_xyz_files
+```
+
+Each frame must include `layer_ids` in `atoms.arrays` with exactly two unique values.
+
+To use an interlayer MACE calculator:
+
+```python
+from mace.calculators import MACECalculator
+
+atoms = ...  # atoms.arrays["layer_ids"] with exactly two layer values
+calc = MACECalculator(
+    model_paths="interlayer_model.model",
+    device="cpu",
+    default_dtype="float64",
+    is_interlayer_calc=True,
+)
+atoms.calc = calc
+```
 
 ## CUDA acceleration with cuEquivariance
 
